@@ -16,6 +16,12 @@ variable "node_version" {
   default     = "20"
 }
 
+variable "skip_build" {
+  description = "Skip the build step (use when you pre-build the application)"
+  type        = bool
+  default     = false
+}
+
 provider "aws" {
   region = var.aws_region
 }
@@ -71,6 +77,8 @@ resource "aws_s3_bucket_policy" "frontend_policy" {
 
 # Build and sync the frontend application
 resource "null_resource" "build_and_sync" {
+  count = var.skip_build ? 0 : 1
+
   # Trigger rebuild when source files change
   triggers = {
     always_run = timestamp()
@@ -87,6 +95,32 @@ resource "null_resource" "build_and_sync" {
         NPM_CMD="$(command -v npm)"
       else
         echo "npm not found. Downloading portable Node.js..."
+
+        # Check if we're on Alpine Linux (musl libc) - Node.js binaries need glibc
+        if [ -f /etc/alpine-release ]; then
+          echo "Detected Alpine Linux. Installing glibc compatibility..."
+          # Install glibc compatibility layer for Alpine
+          if ! command -v apk > /dev/null 2>&1; then
+            echo "ERROR: Alpine detected but apk not found. Cannot install glibc."
+            echo "Please pre-build your application or use a glibc-based image."
+            exit 1
+          fi
+
+          apk add --no-cache libstdc++ || echo "Warning: Could not install libstdc++"
+
+          # Check if glibc is available, if not, warn user
+          if ! [ -f /lib/ld-linux-x86-64.so.2 ] && ! [ -f /lib64/ld-linux-x86-64.so.2 ]; then
+            echo "WARNING: glibc not available. Node.js requires glibc."
+            echo "Installing gcompat for compatibility..."
+            apk add --no-cache gcompat || {
+              echo "ERROR: Cannot install gcompat. Node.js binaries won't work on musl."
+              echo "SOLUTION: Pre-build your application before running Terraform:"
+              echo "  npm install && npm run build"
+              echo "  terraform apply -var='skip_build=true'"
+              exit 1
+            }
+          fi
+        fi
 
         # Check for download tool
         if command -v curl > /dev/null 2>&1; then
@@ -168,6 +202,24 @@ resource "null_resource" "build_and_sync" {
   }
 
   # Sync built files to S3
+  provisioner "local-exec" {
+    command = "aws s3 sync ./dist s3://${aws_s3_bucket.frontend_bucket.id}/ --delete"
+  }
+
+  depends_on = [
+    aws_s3_bucket.frontend_bucket,
+    aws_s3_bucket_website_configuration.frontend_website
+  ]
+}
+
+# Sync pre-built files to S3 (when skip_build is true)
+resource "null_resource" "sync_prebuild" {
+  count = var.skip_build ? 1 : 0
+
+  triggers = {
+    always_run = timestamp()
+  }
+
   provisioner "local-exec" {
     command = "aws s3 sync ./dist s3://${aws_s3_bucket.frontend_bucket.id}/ --delete"
   }

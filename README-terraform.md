@@ -11,42 +11,59 @@ This Terraform configuration deploys a Vite application to AWS S3 with static we
 
 ## How It Works
 
-The Terraform configuration automatically handles npm using **portable Node.js binaries**:
+The Terraform configuration supports two approaches:
 
-1. **Checks for npm** - If npm is already installed, it uses it
-2. **Downloads portable Node.js** - If npm is missing, it automatically downloads the official Node.js portable binaries:
-   - No installation required
-   - No admin/sudo rights needed
-   - Supports Linux (x64, arm64, armv7l) and macOS
-   - Downloads from official nodejs.org
-   - Extracts to `/tmp` and adds to PATH
-3. **Builds the app** - Runs `npm install && npm run build`
-4. **Syncs to S3** - Uploads the built files to your S3 bucket
+### Approach 1: Pre-build (Recommended for Alpine/musl-based containers)
 
-**Benefits:**
-- ✅ No installation or system modifications
-- ✅ No sudo/admin privileges required
-- ✅ Works in any CI/CD environment with internet access
-- ✅ Uses `/bin/sh` for maximum compatibility (no bash required)
-- ✅ Clean and portable approach
+Build your application before running Terraform:
+
+```bash
+npm install && npm run build
+terraform apply -var="skip_build=true"
+```
+
+### Approach 2: Auto-download Node.js (Works on glibc-based systems)
+
+For glibc-based containers (Debian, Ubuntu, etc.), Terraform can automatically:
+
+1. **Check for npm** - Uses existing npm if available
+2. **Download portable Node.js** - If npm is missing:
+   - Downloads official Node.js binaries from nodejs.org
+   - Installs glibc compatibility on Alpine (if possible)
+   - Extracts to `/tmp`
+3. **Build the app** - Runs `npm install && npm run build`
+4. **Sync to S3** - Uploads built files
+
+**Note:** Node.js official binaries require glibc. On Alpine Linux (musl libc), the script attempts to install gcompat, but pre-building is more reliable.
 
 ## Usage
 
-```bash
-# Initialize Terraform
-terraform init
+### Recommended: Pre-build approach
 
-# Deploy (npm will be auto-installed if needed)
-terraform apply
+```bash
+# Build the application first
+npm install
+npm run build
+
+# Deploy with Terraform (skips build)
+terraform init
+terraform apply -var="skip_build=true"
 ```
 
-That's it! No need to install npm manually in your CI/CD pipeline.
+### Alternative: Auto-build (may require glibc)
+
+```bash
+# Terraform will download Node.js and build automatically
+terraform init
+terraform apply
+```
 
 ## Variables
 
 - `aws_region`: AWS region (default: "us-east-1")
 - `bucket_suffix`: Unique suffix for bucket name (default: "static-site-demo-vite")
 - `node_version`: Node.js major version to download if npm is missing (default: "20")
+- `skip_build`: Skip the build step, use pre-built dist folder (default: false)
 
 ## Outputs
 
@@ -55,7 +72,7 @@ That's it! No need to install npm manually in your CI/CD pipeline.
 
 ## Pipeline Examples
 
-### GitHub Actions
+### GitHub Actions (Recommended approach)
 
 ```yaml
 name: Deploy to S3
@@ -70,6 +87,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Build application
+        run: |
+          npm install
+          npm run build
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -83,17 +110,32 @@ jobs:
       - name: Deploy with Terraform
         run: |
           terraform init
-          terraform apply -auto-approve
+          terraform apply -var="skip_build=true" -auto-approve
 ```
 
-### GitLab CI
+### GitLab CI (with pre-build)
 
 ```yaml
+stages:
+  - build
+  - deploy
+
+build:
+  image: node:20-alpine
+  stage: build
+  script:
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+
 deploy:
   image: hashicorp/terraform:latest
+  stage: deploy
   script:
     - terraform init
-    - terraform apply -auto-approve
+    - terraform apply -var="skip_build=true" -auto-approve
   only:
     - main
 ```
@@ -101,9 +143,10 @@ deploy:
 ### Qovery / Generic Pipeline
 
 ```bash
-# Simply run Terraform - npm will be auto-installed if needed
+# Pre-build approach (recommended)
+npm install && npm run build
 terraform init
-terraform apply -auto-approve
+terraform apply -var="skip_build=true" -auto-approve
 ```
 
 ## Troubleshooting
