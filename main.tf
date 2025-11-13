@@ -96,30 +96,13 @@ resource "null_resource" "build_and_sync" {
       else
         echo "npm not found. Downloading portable Node.js..."
 
-        # Check if we're on Alpine Linux (musl libc) - Node.js binaries need glibc
-        if [ -f /etc/alpine-release ]; then
-          echo "Detected Alpine Linux. Installing glibc compatibility..."
-          # Install glibc compatibility layer for Alpine
-          if ! command -v apk > /dev/null 2>&1; then
-            echo "ERROR: Alpine detected but apk not found. Cannot install glibc."
-            echo "Please pre-build your application or use a glibc-based image."
-            exit 1
-          fi
-
-          apk add --no-cache libstdc++ || echo "Warning: Could not install libstdc++"
-
-          # Check if glibc is available, if not, warn user
-          if ! [ -f /lib/ld-linux-x86-64.so.2 ] && ! [ -f /lib64/ld-linux-x86-64.so.2 ]; then
-            echo "WARNING: glibc not available. Node.js requires glibc."
-            echo "Installing gcompat for compatibility..."
-            apk add --no-cache gcompat || {
-              echo "ERROR: Cannot install gcompat. Node.js binaries won't work on musl."
-              echo "SOLUTION: Pre-build your application before running Terraform:"
-              echo "  npm install && npm run build"
-              echo "  terraform apply -var='skip_build=true'"
-              exit 1
-            }
-          fi
+        # Detect libc implementation (glibc vs musl)
+        LIBC_TYPE="glibc"
+        if [ -f /etc/alpine-release ] || ldd --version 2>&1 | grep -q musl; then
+          LIBC_TYPE="musl"
+          echo "Detected musl libc (Alpine Linux)"
+        else
+          echo "Detected glibc-based system"
         fi
 
         # Check for download tool
@@ -152,9 +135,17 @@ resource "null_resource" "build_and_sync" {
           *) echo "Unsupported OS: $OS"; exit 1 ;;
         esac
 
-        # Download and extract portable Node.js
+        # Build Node.js distribution name
+        # Official Node.js provides musl builds: node-vX.Y.Z-linux-x64-musl.tar.gz
         NODE_VERSION="${var.node_version}.0.0"
-        NODE_DIST="node-v$NODE_VERSION-$NODE_OS-$NODE_ARCH"
+        if [ "$LIBC_TYPE" = "musl" ] && [ "$NODE_OS" = "linux" ]; then
+          NODE_DIST="node-v$NODE_VERSION-$NODE_OS-$NODE_ARCH-musl"
+          echo "Using musl-compiled Node.js binary"
+        else
+          NODE_DIST="node-v$NODE_VERSION-$NODE_OS-$NODE_ARCH"
+          echo "Using standard glibc Node.js binary"
+        fi
+
         NODE_URL="https://nodejs.org/dist/v$NODE_VERSION/$NODE_DIST.tar.gz"
 
         echo "Downloading Node.js from $NODE_URL..."
@@ -163,33 +154,20 @@ resource "null_resource" "build_and_sync" {
         echo "Extracting Node.js..."
         tar -xzf /tmp/node.tar.gz -C /tmp
 
-        # Debug: Check what was extracted
-        echo "Checking extracted files in /tmp..."
-        ls -la /tmp/ | grep node || echo "No node directories found"
-
         # Set absolute paths
         NODE_CMD="/tmp/$NODE_DIST/bin/node"
         NPM_CMD="/tmp/$NODE_DIST/bin/npm"
 
-        echo "Expected Node.js location: /tmp/$NODE_DIST"
-        if [ -d "/tmp/$NODE_DIST" ]; then
-          echo "Directory exists, checking binaries..."
-          ls -la "/tmp/$NODE_DIST/bin/" || echo "bin directory not found"
-
-          if [ -f "$NODE_CMD" ]; then
-            echo "node binary found, checking if executable..."
-            file "$NODE_CMD" || echo "Cannot determine file type"
-            ldd "$NODE_CMD" 2>&1 || echo "Cannot check dependencies (static binary or ldd not available)"
-          else
-            echo "ERROR: node binary not found at $NODE_CMD"
-            exit 1
-          fi
-        else
-          echo "ERROR: Expected directory /tmp/$NODE_DIST does not exist"
+        # Verify installation
+        if [ ! -f "$NODE_CMD" ]; then
+          echo "ERROR: Node.js binary not found at $NODE_CMD"
+          echo "Downloaded from: $NODE_URL"
+          echo "Contents of /tmp:"
+          ls -la /tmp/ | grep node || echo "No node directories found"
           exit 1
         fi
 
-        echo "Portable Node.js ready: $($NODE_CMD --version)"
+        echo "Node.js installed successfully: $($NODE_CMD --version)"
         echo "npm version: $($NPM_CMD --version)"
       fi
 
