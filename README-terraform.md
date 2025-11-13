@@ -17,8 +17,8 @@ The Terraform configuration automatically handles npm using **portable Node.js b
 2. **Downloads portable Node.js** - If npm is missing:
    - Detects libc implementation (glibc vs musl)
    - Downloads appropriate Node.js binary:
-     - **Alpine/musl**: Uses musl-compiled binaries (`node-vX.Y.Z-linux-x64-musl.tar.gz`)
-     - **Debian/Ubuntu**: Uses standard glibc binaries
+     - **Alpine/musl**: Uses musl-compiled binaries from [unofficial-builds.nodejs.org](https://unofficial-builds.nodejs.org)
+     - **Debian/Ubuntu**: Uses standard glibc binaries from [nodejs.org](https://nodejs.org)
    - Extracts to `/tmp`
 3. **Builds the app** - Runs `npm install && npm run build`
 4. **Syncs to S3** - Uploads built files
@@ -138,8 +138,13 @@ apt-get install -y curl  # Debian/Ubuntu
 
 ### "Node.js binary not found" error
 
-The script automatically detects musl vs glibc and downloads the correct binary. If this fails:
-- Check the Node.js version supports musl binaries (v16.17.0+)
+The script automatically detects musl vs glibc and downloads the correct binary from:
+- **Alpine/musl**: [unofficial-builds.nodejs.org](https://unofficial-builds.nodejs.org)
+- **glibc**: [nodejs.org](https://nodejs.org)
+
+If download fails:
+- Check internet connectivity to these domains
+- Verify the Node.js version exists (default: 20)
 - Try the pre-build approach with `skip_build=true`
 
 ### Architecture not supported

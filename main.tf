@@ -135,18 +135,20 @@ resource "null_resource" "build_and_sync" {
           *) echo "Unsupported OS: $OS"; exit 1 ;;
         esac
 
-        # Build Node.js distribution name
-        # Official Node.js provides musl builds: node-vX.Y.Z-linux-x64-musl.tar.gz
+        # Build Node.js distribution name and URL
         NODE_VERSION="${var.node_version}.0.0"
-        if [ "$LIBC_TYPE" = "musl" ] && [ "$NODE_OS" = "linux" ]; then
-          NODE_DIST="node-v$NODE_VERSION-$NODE_OS-$NODE_ARCH-musl"
-          echo "Using musl-compiled Node.js binary"
-        else
-          NODE_DIST="node-v$NODE_VERSION-$NODE_OS-$NODE_ARCH"
-          echo "Using standard glibc Node.js binary"
-        fi
 
-        NODE_URL="https://nodejs.org/dist/v$NODE_VERSION/$NODE_DIST.tar.gz"
+        if [ "$LIBC_TYPE" = "musl" ] && [ "$NODE_OS" = "linux" ]; then
+          # Use unofficial-builds.nodejs.org for musl binaries
+          NODE_DIST="node-v$NODE_VERSION-$NODE_OS-$NODE_ARCH-musl"
+          NODE_URL="https://unofficial-builds.nodejs.org/download/release/v$NODE_VERSION/$NODE_DIST.tar.gz"
+          echo "Using musl-compiled Node.js binary from unofficial-builds"
+        else
+          # Use official nodejs.org for glibc binaries
+          NODE_DIST="node-v$NODE_VERSION-$NODE_OS-$NODE_ARCH"
+          NODE_URL="https://nodejs.org/dist/v$NODE_VERSION/$NODE_DIST.tar.gz"
+          echo "Using standard glibc Node.js binary from official nodejs.org"
+        fi
 
         echo "Downloading Node.js from $NODE_URL..."
         $DOWNLOAD_CMD "$NODE_URL" $DOWNLOAD_OUTPUT /tmp/node.tar.gz
