@@ -16,18 +16,19 @@ The Terraform configuration automatically handles npm using **portable Node.js b
 1. **Checks for npm** - Uses existing npm if available
 2. **Downloads portable Node.js** - If npm is missing:
    - Detects libc implementation (glibc vs musl)
-   - Downloads appropriate Node.js binary:
-     - **Alpine/musl**: Uses musl-compiled binaries from [unofficial-builds.nodejs.org](https://unofficial-builds.nodejs.org)
-     - **Debian/Ubuntu**: Uses standard glibc binaries from [nodejs.org](https://nodejs.org)
+   - **For Alpine/musl**:
+     - Installs `libstdc++` and `libgcc` (required for Node.js)
+     - Downloads musl-compiled binaries from [unofficial-builds.nodejs.org](https://unofficial-builds.nodejs.org)
+   - **For Debian/Ubuntu**: Downloads standard glibc binaries from [nodejs.org](https://nodejs.org)
    - Extracts to `/tmp`
 3. **Builds the app** - Runs `npm install && npm run build`
 4. **Syncs to S3** - Uploads built files
 
 **Benefits:**
 - ✅ Works on Alpine Linux (musl) and glibc-based systems
-- ✅ No installation or system modifications needed
-- ✅ No sudo/admin privileges required
+- ✅ Automatically installs minimal dependencies (libstdc++, libgcc on Alpine)
 - ✅ Automatically selects correct binary for your environment
+- ✅ Simple one-command deployment
 
 ## Usage
 

@@ -101,6 +101,18 @@ resource "null_resource" "build_and_sync" {
         if [ -f /etc/alpine-release ] || ldd --version 2>&1 | grep -q musl; then
           LIBC_TYPE="musl"
           echo "Detected musl libc (Alpine Linux)"
+
+          # Install libstdc++ for musl Node.js binaries (required for C++ components)
+          if command -v apk > /dev/null 2>&1; then
+            echo "Installing libstdc++ for Node.js..."
+            apk add --no-cache libstdc++ libgcc || {
+              echo "ERROR: Failed to install libstdc++. Node.js requires C++ standard library."
+              echo "SOLUTION: Pre-build your application:"
+              echo "  npm install && npm run build"
+              echo "  terraform apply -var='skip_build=true'"
+              exit 1
+            }
+          fi
         else
           echo "Detected glibc-based system"
         fi
