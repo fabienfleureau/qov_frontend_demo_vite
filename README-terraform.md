@@ -27,6 +27,7 @@ The Terraform configuration automatically handles npm using **portable Node.js b
 - ✅ No installation or system modifications
 - ✅ No sudo/admin privileges required
 - ✅ Works in any CI/CD environment with internet access
+- ✅ Uses `/bin/sh` for maximum compatibility (no bash required)
 - ✅ Clean and portable approach
 
 ## Usage

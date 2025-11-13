@@ -79,11 +79,10 @@ resource "null_resource" "build_and_sync" {
   # Download portable Node.js and build the application (no installation or admin rights needed)
   provisioner "local-exec" {
     command = <<-EOT
-      #!/bin/bash
       set -e
 
       # Check if npm is available
-      if command -v npm &> /dev/null; then
+      if command -v npm > /dev/null 2>&1; then
         echo "npm found: $(npm --version)"
         NPM_CMD="npm"
       else
@@ -130,7 +129,7 @@ resource "null_resource" "build_and_sync" {
       $NPM_CMD install
       $NPM_CMD run build
     EOT
-    interpreter = ["bash", "-c"]
+    interpreter = ["sh", "-c"]
   }
 
   # Sync built files to S3
