@@ -88,6 +88,19 @@ resource "null_resource" "build_and_sync" {
       else
         echo "npm not found. Downloading portable Node.js..."
 
+        # Check for download tool
+        if command -v curl > /dev/null 2>&1; then
+          DOWNLOAD_CMD="curl -fsSL"
+          DOWNLOAD_OUTPUT="-o"
+        elif command -v wget > /dev/null 2>&1; then
+          DOWNLOAD_CMD="wget -q"
+          DOWNLOAD_OUTPUT="-O"
+        else
+          echo "ERROR: Neither curl nor wget found. Cannot download Node.js."
+          echo "Please install curl or wget, or pre-install Node.js in your pipeline."
+          exit 1
+        fi
+
         # Detect architecture
         ARCH=$(uname -m)
         case $ARCH in
@@ -111,7 +124,7 @@ resource "null_resource" "build_and_sync" {
         NODE_URL="https://nodejs.org/dist/v$NODE_VERSION/$NODE_DIST.tar.gz"
 
         echo "Downloading Node.js from $NODE_URL..."
-        curl -fsSL "$NODE_URL" -o /tmp/node.tar.gz
+        $DOWNLOAD_CMD "$NODE_URL" $DOWNLOAD_OUTPUT /tmp/node.tar.gz
 
         echo "Extracting Node.js..."
         tar -xzf /tmp/node.tar.gz -C /tmp

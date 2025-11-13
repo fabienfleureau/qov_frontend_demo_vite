@@ -114,6 +114,14 @@ This shouldn't happen as npm is automatically downloaded. Check:
 - Internet connectivity (needs access to nodejs.org)
 - `/tmp` directory is writable
 - Architecture is supported (x64, arm64, armv7l on Linux/macOS)
+- Either `curl` or `wget` is available (script supports both)
+
+### "Neither curl nor wget found" error
+
+The Terraform container needs either curl or wget to download Node.js. Solutions:
+- Install curl in your pipeline: `apk add curl` (Alpine) or `apt-get install -y curl` (Debian)
+- Or use a Terraform image that includes curl (most do)
+- Or pre-install Node.js before running Terraform
 
 ### Architecture not supported
 
