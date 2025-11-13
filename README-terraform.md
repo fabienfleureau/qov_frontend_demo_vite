@@ -11,15 +11,23 @@ This Terraform configuration deploys a Vite application to AWS S3 with static we
 
 ## How It Works
 
-The Terraform configuration automatically handles npm installation:
+The Terraform configuration automatically handles npm using **portable Node.js binaries**:
 
 1. **Checks for npm** - If npm is already installed, it uses it
-2. **Auto-installs Node.js** - If npm is missing, it automatically installs Node.js based on your OS:
-   - Debian/Ubuntu: Uses `apt-get`
-   - RHEL/CentOS/Amazon Linux: Uses `yum`
-   - Alpine Linux: Uses `apk`
+2. **Downloads portable Node.js** - If npm is missing, it automatically downloads the official Node.js portable binaries:
+   - No installation required
+   - No admin/sudo rights needed
+   - Supports Linux (x64, arm64, armv7l) and macOS
+   - Downloads from official nodejs.org
+   - Extracts to `/tmp` and adds to PATH
 3. **Builds the app** - Runs `npm install && npm run build`
 4. **Syncs to S3** - Uploads the built files to your S3 bucket
+
+**Benefits:**
+- ✅ No installation or system modifications
+- ✅ No sudo/admin privileges required
+- ✅ Works in any CI/CD environment with internet access
+- ✅ Clean and portable approach
 
 ## Usage
 
@@ -37,7 +45,7 @@ That's it! No need to install npm manually in your CI/CD pipeline.
 
 - `aws_region`: AWS region (default: "us-east-1")
 - `bucket_suffix`: Unique suffix for bucket name (default: "static-site-demo-vite")
-- `node_version`: Node.js version to install if npm is missing (default: "20")
+- `node_version`: Node.js major version to download if npm is missing (default: "20")
 
 ## Outputs
 
@@ -99,18 +107,25 @@ terraform apply -auto-approve
 
 ## Troubleshooting
 
-### "npm: not found" error
+### Build fails with "npm: not found"
 
-**Solution 1 (Recommended):** Ensure Docker is available in your pipeline
-**Solution 2:** Use `skip_build=true` and build separately
-**Solution 3:** Install Node.js in your pipeline before running Terraform
+This shouldn't happen as npm is automatically downloaded. Check:
+- Internet connectivity (needs access to nodejs.org)
+- `/tmp` directory is writable
+- Architecture is supported (x64, arm64, armv7l on Linux/macOS)
 
-### "docker: not found" error
+### Architecture not supported
 
-Either:
-- Enable Docker in your CI/CD pipeline
-- Use pre-build approach with `skip_build=true`
-- Install npm directly in the pipeline
+If you see "Unsupported architecture" error, you may need to:
+- Pre-install Node.js in your pipeline
+- Or pre-build the application and sync manually
+
+### Want to use a specific Node.js version?
+
+```bash
+terraform apply -var="node_version=18"  # Use Node.js 18.x
+terraform apply -var="node_version=22"  # Use Node.js 22.x
+```
 
 ## Clean Up
 

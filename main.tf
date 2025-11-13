@@ -76,46 +76,59 @@ resource "null_resource" "build_and_sync" {
     always_run = timestamp()
   }
 
-  # Install Node.js and npm if not available, then build the application
+  # Download portable Node.js and build the application (no installation or admin rights needed)
   provisioner "local-exec" {
     command = <<-EOT
       #!/bin/bash
       set -e
 
-      # Function to install Node.js based on OS
-      install_nodejs() {
-        if command -v apt-get &> /dev/null; then
-          # Debian/Ubuntu
-          echo "Installing Node.js ${var.node_version} via apt..."
-          curl -fsSL https://deb.nodesource.com/setup_${var.node_version}.x | bash -
-          apt-get install -y nodejs
-        elif command -v yum &> /dev/null; then
-          # RHEL/CentOS/Amazon Linux
-          echo "Installing Node.js ${var.node_version} via yum..."
-          curl -fsSL https://rpm.nodesource.com/setup_${var.node_version}.x | bash -
-          yum install -y nodejs
-        elif command -v apk &> /dev/null; then
-          # Alpine Linux
-          echo "Installing Node.js via apk..."
-          apk add --no-cache nodejs npm
-        else
-          echo "ERROR: Unsupported package manager. Please install Node.js manually."
-          exit 1
-        fi
-      }
-
       # Check if npm is available
-      if ! command -v npm &> /dev/null; then
-        echo "npm not found. Installing Node.js..."
-        install_nodejs
-      else
+      if command -v npm &> /dev/null; then
         echo "npm found: $(npm --version)"
+        NPM_CMD="npm"
+      else
+        echo "npm not found. Downloading portable Node.js..."
+
+        # Detect architecture
+        ARCH=$(uname -m)
+        case $ARCH in
+          x86_64) NODE_ARCH="x64" ;;
+          aarch64|arm64) NODE_ARCH="arm64" ;;
+          armv7l) NODE_ARCH="armv7l" ;;
+          *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+        esac
+
+        # Detect OS
+        OS=$(uname -s)
+        case $OS in
+          Linux) NODE_OS="linux" ;;
+          Darwin) NODE_OS="darwin" ;;
+          *) echo "Unsupported OS: $OS"; exit 1 ;;
+        esac
+
+        # Download and extract portable Node.js
+        NODE_VERSION="${var.node_version}.0.0"
+        NODE_DIST="node-v$NODE_VERSION-$NODE_OS-$NODE_ARCH"
+        NODE_URL="https://nodejs.org/dist/v$NODE_VERSION/$NODE_DIST.tar.gz"
+
+        echo "Downloading Node.js from $NODE_URL..."
+        curl -fsSL "$NODE_URL" -o /tmp/node.tar.gz
+
+        echo "Extracting Node.js..."
+        tar -xzf /tmp/node.tar.gz -C /tmp
+
+        # Add to PATH
+        export PATH="/tmp/$NODE_DIST/bin:$PATH"
+        NPM_CMD="/tmp/$NODE_DIST/bin/npm"
+
+        echo "Portable Node.js ready: $(node --version)"
+        echo "npm version: $(npm --version)"
       fi
 
       # Build the application
       echo "Building application..."
-      npm install
-      npm run build
+      $NPM_CMD install
+      $NPM_CMD run build
     EOT
     interpreter = ["bash", "-c"]
   }
