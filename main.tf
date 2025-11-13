@@ -84,7 +84,7 @@ resource "null_resource" "build_and_sync" {
       # Check if npm is available
       if command -v npm > /dev/null 2>&1; then
         echo "npm found: $(npm --version)"
-        NPM_CMD="npm"
+        NPM_CMD="$(command -v npm)"
       else
         echo "npm not found. Downloading portable Node.js..."
 
@@ -129,12 +129,12 @@ resource "null_resource" "build_and_sync" {
         echo "Extracting Node.js..."
         tar -xzf /tmp/node.tar.gz -C /tmp
 
-        # Add to PATH
-        export PATH="/tmp/$NODE_DIST/bin:$PATH"
+        # Set absolute paths
+        NODE_CMD="/tmp/$NODE_DIST/bin/node"
         NPM_CMD="/tmp/$NODE_DIST/bin/npm"
 
-        echo "Portable Node.js ready: $(node --version)"
-        echo "npm version: $(npm --version)"
+        echo "Portable Node.js ready: $($NODE_CMD --version)"
+        echo "npm version: $($NPM_CMD --version)"
       fi
 
       # Build the application
