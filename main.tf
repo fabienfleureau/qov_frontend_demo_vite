@@ -10,6 +10,12 @@ variable "bucket_suffix" {
   default     = "static-site-demo-vite"
 }
 
+variable "node_version" {
+  description = "Node.js version to install if npm is not available"
+  type        = string
+  default     = "20"
+}
+
 provider "aws" {
   region = var.aws_region
 }
@@ -70,9 +76,48 @@ resource "null_resource" "build_and_sync" {
     always_run = timestamp()
   }
 
-  # Build the application
+  # Install Node.js and npm if not available, then build the application
   provisioner "local-exec" {
-    command = "npm install && npm run build"
+    command = <<-EOT
+      #!/bin/bash
+      set -e
+
+      # Function to install Node.js based on OS
+      install_nodejs() {
+        if command -v apt-get &> /dev/null; then
+          # Debian/Ubuntu
+          echo "Installing Node.js ${var.node_version} via apt..."
+          curl -fsSL https://deb.nodesource.com/setup_${var.node_version}.x | bash -
+          apt-get install -y nodejs
+        elif command -v yum &> /dev/null; then
+          # RHEL/CentOS/Amazon Linux
+          echo "Installing Node.js ${var.node_version} via yum..."
+          curl -fsSL https://rpm.nodesource.com/setup_${var.node_version}.x | bash -
+          yum install -y nodejs
+        elif command -v apk &> /dev/null; then
+          # Alpine Linux
+          echo "Installing Node.js via apk..."
+          apk add --no-cache nodejs npm
+        else
+          echo "ERROR: Unsupported package manager. Please install Node.js manually."
+          exit 1
+        fi
+      }
+
+      # Check if npm is available
+      if ! command -v npm &> /dev/null; then
+        echo "npm not found. Installing Node.js..."
+        install_nodejs
+      else
+        echo "npm found: $(npm --version)"
+      fi
+
+      # Build the application
+      echo "Building application..."
+      npm install
+      npm run build
+    EOT
+    interpreter = ["bash", "-c"]
   }
 
   # Sync built files to S3
