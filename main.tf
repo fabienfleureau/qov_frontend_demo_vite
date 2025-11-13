@@ -129,9 +129,31 @@ resource "null_resource" "build_and_sync" {
         echo "Extracting Node.js..."
         tar -xzf /tmp/node.tar.gz -C /tmp
 
+        # Debug: Check what was extracted
+        echo "Checking extracted files in /tmp..."
+        ls -la /tmp/ | grep node || echo "No node directories found"
+
         # Set absolute paths
         NODE_CMD="/tmp/$NODE_DIST/bin/node"
         NPM_CMD="/tmp/$NODE_DIST/bin/npm"
+
+        echo "Expected Node.js location: /tmp/$NODE_DIST"
+        if [ -d "/tmp/$NODE_DIST" ]; then
+          echo "Directory exists, checking binaries..."
+          ls -la "/tmp/$NODE_DIST/bin/" || echo "bin directory not found"
+
+          if [ -f "$NODE_CMD" ]; then
+            echo "node binary found, checking if executable..."
+            file "$NODE_CMD" || echo "Cannot determine file type"
+            ldd "$NODE_CMD" 2>&1 || echo "Cannot check dependencies (static binary or ldd not available)"
+          else
+            echo "ERROR: node binary not found at $NODE_CMD"
+            exit 1
+          fi
+        else
+          echo "ERROR: Expected directory /tmp/$NODE_DIST does not exist"
+          exit 1
+        fi
 
         echo "Portable Node.js ready: $($NODE_CMD --version)"
         echo "npm version: $($NPM_CMD --version)"
