@@ -1,4 +1,4 @@
-FROM hashicorp/terraform:1.14
+FROM hashicorp/terraform:1.13
 
 RUN <<EOF
 set -e
