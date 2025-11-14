@@ -2,9 +2,9 @@
 set -e
 
 TF_COMMAND=terraform
-ROOT_MODULE_PATH=$1
-CMD=$2
-PLAN_NAME=$3
+ROOT_MODULE_PATH=/
+CMD=apply
+PLAN_NAME=main.tf
 shift 3
 
 mkdir -p /persistent-volume/terraform-work
