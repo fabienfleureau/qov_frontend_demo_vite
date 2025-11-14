@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-TF_COMMAND=apply
+TF_COMMAND=terraform
 ROOT_MODULE_PATH=$1
 CMD=$2
 PLAN_NAME=$3
