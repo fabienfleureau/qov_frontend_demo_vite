@@ -7,8 +7,8 @@ CMD=apply
 PLAN_NAME=main.tf
 #shift 3
 
-mkdir -p /persistent-volume/terraform-work
-mkdir -p /persistent-volume/terraform-plan-output
+mkdir -p /tmp/persistent-volume/terraform-work
+mkdir -p /tmp/persistent-volume/terraform-plan-output
 
 rsync -a --delete \
           --exclude='entrypoint.sh' \
@@ -16,12 +16,12 @@ rsync -a --delete \
           --exclude='.terraform' \
           --exclude='.terraform.lock.hcl' \
           --exclude='.-tf.plan' \
-          /data/ /persistent-volume/terraform-work
+          /data/ /tmp/persistent-volume/terraform-work
 
-cd /persistent-volume/terraform-work/"$ROOT_MODULE_PATH"
+cd /tmp/persistent-volume/terraform-work/"$ROOT_MODULE_PATH"
 
 log() {
-  echo -e "\n[==> ${TF_COMMAND}]: $1\n"
+  echo -e "\n[==> ${TF_COMMAND}]:terraform\n"
 }
 
 
@@ -63,14 +63,14 @@ case "$CMD" in
         log "${TF_COMMAND} validate $TF_CLI_ARGS_validate"
         ${TF_COMMAND} validate
         log "${TF_COMMAND} plan $TF_CLI_ARGS_plan"
-        ${TF_COMMAND} plan -input=false -out=/persistent-volume/terraform-plan-output/"${PLAN_NAME}"-tf.plan "$@"
+        ${TF_COMMAND} plan -input=false -out=/tmp/persistent-volume/terraform-plan-output/"${PLAN_NAME}"-tf.plan "$@"
         ;;
     "apply_from_plan")
         run_terraform_init
         log "${TF_COMMAND} validate $TF_CLI_ARGS_validate"
         ${TF_COMMAND} validate
         log "${TF_COMMAND} apply $TF_CLI_ARGS_apply"
-        ${TF_COMMAND} apply -input=false /persistent-volume/terraform-plan-output/"${PLAN_NAME}"-tf.plan
+        ${TF_COMMAND} apply -input=false /tmp/persistent-volume/terraform-plan-output/"${PLAN_NAME}"-tf.plan
         log "${TF_COMMAND} output $TF_CLI_ARGS_output"
         ${TF_COMMAND} output -json > /qovery-output/qovery-output.json
         ;;
