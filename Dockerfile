@@ -3,7 +3,7 @@ FROM hashicorp/terraform:1.13
 RUN <<EOF
 set -e
 apk update
-apk add dumb-init rsync npm bash
+apk add dumb-init rsync npm bash aws-cli
 adduser -D -u 1000 app
 mkdir /data
 chown -R app:app /data
