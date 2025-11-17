@@ -45,12 +45,17 @@ resource "aws_s3_bucket_website_configuration" "frontend_website" {
   }
 }
 
-# CloudFront Origin Access Identity
-resource "aws_cloudfront_origin_access_identity" "frontend_oai" {
-  comment = "OAI for ${aws_s3_bucket.frontend_bucket.bucket}"
+# Make bucket public for static website hosting
+resource "aws_s3_bucket_public_access_block" "frontend_public_access" {
+  bucket = aws_s3_bucket.frontend_bucket.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
 }
 
-# Bucket policy to allow CloudFront access
+# Bucket policy to allow public read access
 resource "aws_s3_bucket_policy" "frontend_policy" {
   bucket = aws_s3_bucket.frontend_bucket.id
 
@@ -58,19 +63,19 @@ resource "aws_s3_bucket_policy" "frontend_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "CloudFrontReadGetObject"
+        Sid       = "PublicReadGetObject"
         Effect    = "Allow"
-        Principal = {
-          AWS = aws_cloudfront_origin_access_identity.frontend_oai.iam_arn
-        }
+        Principal = "*"
         Action    = "s3:GetObject"
         Resource  = "${aws_s3_bucket.frontend_bucket.arn}/*"
       }
     ]
   })
+
+  depends_on = [aws_s3_bucket_public_access_block.frontend_public_access]
 }
 
-# CloudFront distribution
+# CloudFront distribution with S3 static website origin
 resource "aws_cloudfront_distribution" "frontend_distribution" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -78,18 +83,21 @@ resource "aws_cloudfront_distribution" "frontend_distribution" {
   price_class         = "PriceClass_100"
 
   origin {
-    domain_name = aws_s3_bucket.frontend_bucket.bucket_regional_domain_name
-    origin_id   = "S3-${aws_s3_bucket.frontend_bucket.bucket}"
+    domain_name = aws_s3_bucket_website_configuration.frontend_website.website_endpoint
+    origin_id   = "S3-Website-${aws_s3_bucket.frontend_bucket.bucket}"
 
-    s3_origin_config {
-      origin_access_identity = aws_cloudfront_origin_access_identity.frontend_oai.cloudfront_access_identity_path
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.frontend_bucket.bucket}"
+    target_origin_id = "S3-Website-${aws_s3_bucket.frontend_bucket.bucket}"
 
     forwarded_values {
       query_string = false
@@ -103,21 +111,6 @@ resource "aws_cloudfront_distribution" "frontend_distribution" {
     default_ttl            = 3600
     max_ttl                = 86400
     compress               = true
-  }
-
-  # Custom error response for SPA routing
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
   }
 
   restrictions {
